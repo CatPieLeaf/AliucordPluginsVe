@@ -1,3 +1,4 @@
+
 /*
  * Ven's Aliucord Plugins
  * Copyright (C) 2021 Vendicated
@@ -36,31 +37,43 @@ class Themer : Plugin() {
 
     override fun start(ctx: Context) {
         currentTheme = StoreStream.getUserSettingsSystem().theme
+
         subscription = StoreStream.getUserSettingsSystem().observeSettings(false).subscribe {
             if (currentTheme != theme) {
                 currentTheme = theme
                 initAttrMappings()
             }
         }
+
         initAttrMappings()
         mSettings = settings
         addPatches(patcher)
         ResourceManager.init(ctx)
         ThemeLoader.loadThemes(true)
 
-        // fixme
-        patcher.patch(com.aliucord.Main::class.java.getDeclaredMethod("crashHandler", Thread::class.java, Throwable::class.java), PreHook {
-            // Ignore thread exceptions
-            if (Looper.getMainLooper().thread != it.args[0]) return@PreHook
-            val ex = it.args[1] as? Resources.NotFoundException ?: return@PreHook
-            when (ex.stackTrace.firstOrNull()?.methodName) {
-                // Crash caused by font hook
-                "loadFont", "getFont" -> {
-                    settings.enableFontHook = false
-                    settings.fontHookCausedCrash = true
+        // Safely patch crashHandler
+        try {
+            val method = com.aliucord.Main::class.java.getDeclaredMethod(
+                "crashHandler",
+                Thread::class.java,
+                Throwable::class.java
+            )
+
+            patcher.patch(method, PreHook {
+                // Ignore thread exceptions not on main looper
+                if (Looper.getMainLooper().thread != it.args[0]) return@PreHook
+
+                val ex = it.args[1] as? Resources.NotFoundException ?: return@PreHook
+                when (ex.stackTrace.firstOrNull()?.methodName) {
+                    "loadFont", "getFont" -> {
+                        settings.enableFontHook = false
+                        settings.fontHookCausedCrash = true
+                    }
                 }
-            }
-        })
+            })
+        } catch (t: Throwable) {
+            logger.error("Failed to patch crashHandler", t)
+        }
     }
 
     override fun stop(context: Context) {
