@@ -1,13 +1,3 @@
-/*
- * Ven's Aliucord Plugins
- * Copyright (C) 2021 Vendicated
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at 
- * http://www.apache.org/licenses/LICENSE-2.0
-*/
-
 package dev.vendicated.aliucordplugs.themer
 
 import com.aliucord.Http
@@ -53,7 +43,6 @@ class Theme(
 
     fun convertIfLegacy(): Boolean {
         val json = json()
-
         val isLegacy = THEME_KEYS.none { json.has(it) }
         if (isLegacy) convertLegacyTheme(this@Theme, json)
         return isLegacy
@@ -67,8 +56,13 @@ class Theme(
                     Http.Request(it).use { req ->
                         val res = req.execute().text()
                         val json = JSONObject(res)
-                        val remoteVersion = (json.optJSONObject("manifest") ?: json).optString("version")
-                        if (remoteVersion.isNotEmpty() && Updater.isOutdated("Theme $name", version, remoteVersion)) {
+                        val manifest = json.optJSONObject("manifest") ?: json
+                        val remoteVersion = manifest.optString("version", "")
+                        if (remoteVersion.isEmpty()) {
+                            info("Updater URL did not return a version field.")
+                            return@use
+                        }
+                        if (Updater.isOutdated("Theme $name", version, remoteVersion)) {
                             file.writeText(res)
                             info("Successfully updated: $version -> $remoteVersion")
                         }
@@ -106,4 +100,3 @@ class Theme(
         }
     }
 }
-
